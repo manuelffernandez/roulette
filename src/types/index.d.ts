@@ -1,3 +1,5 @@
+export type EventGroup = "inside" | "outside";
+
 export type EventType =
   | "number"
   | "split"

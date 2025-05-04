@@ -1,15 +1,21 @@
 import type { EventId, SampleSpace } from "../types";
 import { Event } from "./Event";
 import { No } from "./No";
+import seedrandom from "seedrandom";
 
 export class Roulette {
   static readonly numbers: Array<No> = Roulette.generateNumbers();
   static readonly events: Array<Event> = Roulette.generateEvents();
+  private rng: seedrandom.PRNG | (() => number);
+
+  constructor(seed?: string) {
+    this.rng = seed ? seedrandom(seed) : Math.random;
+  }
 
   public spin() {
-    const randomIndex = Math.floor(Math.random() * Roulette.numbers.length);
+    const randomIndex = Math.floor(this.rng() * Roulette.numbers.length);
     const number = Roulette.numbers[randomIndex];
-    console.log("Number: ", number);
+
     return number;
   }
 
@@ -62,7 +68,15 @@ export class Roulette {
       const { value, color } = number;
 
       // number
-      events.push(new Event("number", [number], 35, `n${number.value}`));
+      events.push(
+        new Event({
+          id: `n${number.value}`,
+          type: "number",
+          group: "inside",
+          values: [number],
+          payout: 35,
+        })
+      );
 
       if (value === 0) return;
 
@@ -98,26 +112,146 @@ export class Roulette {
       else odd.push(number);
     });
 
-    events.push(new Event("column", firstColumn, 2, "firstColumn"));
-    events.push(new Event("column", secondColumn, 2, "secondColumn"));
-    events.push(new Event("column", thirdColumn, 2, "thirdColumn"));
-    events.push(new Event("dozen", firstDozen, 2, "firstDozen"));
-    events.push(new Event("dozen", secondDozen, 2, "secondDozen"));
-    events.push(new Event("dozen", thirdDozen, 2, "thirdDozen"));
-    streets.forEach((street, index) =>
-      events.push(new Event("street", street, 11, `st${index}` as EventId))
+    events.push(
+      new Event({
+        id: "firstColumn",
+        type: "column",
+        group: "outside",
+        values: firstColumn,
+        payout: 2,
+      })
     );
-    events.push(new Event("color", red, 1, "red"));
-    events.push(new Event("color", black, 1, "black"));
-    events.push(new Event("low_high", low, 1, "low"));
-    events.push(new Event("low_high", high, 1, "high"));
-    events.push(new Event("even_odd", even, 1, "even"));
-    events.push(new Event("even_odd", odd, 1, "odd"));
+    events.push(
+      new Event({
+        id: "secondColumn",
+        type: "column",
+        group: "outside",
+        values: secondColumn,
+        payout: 2,
+      })
+    );
+    events.push(
+      new Event({
+        id: "thirdColumn",
+        type: "column",
+        group: "outside",
+        values: thirdColumn,
+        payout: 2,
+      })
+    );
+    events.push(
+      new Event({
+        id: "firstDozen",
+        type: "dozen",
+        group: "outside",
+        values: firstDozen,
+        payout: 2,
+      })
+    );
+    events.push(
+      new Event({
+        id: "secondDozen",
+        type: "dozen",
+        group: "outside",
+        values: secondDozen,
+        payout: 2,
+      })
+    );
+    events.push(
+      new Event({
+        id: "thirdDozen",
+        type: "dozen",
+        group: "outside",
+        values: thirdDozen,
+        payout: 2,
+      })
+    );
+    streets.forEach((street, index) =>
+      events.push(
+        new Event({
+          id: `st${index}` as EventId,
+          type: "street",
+          group: "inside",
+          values: street,
+          payout: 11,
+        })
+      )
+    );
+    events.push(
+      new Event({
+        id: "red",
+        type: "color",
+        group: "outside",
+        values: red,
+        payout: 1,
+      })
+    );
+    events.push(
+      new Event({
+        id: "black",
+        type: "color",
+        group: "outside",
+        values: black,
+        payout: 1,
+      })
+    );
+    events.push(
+      new Event({
+        id: "low",
+        type: "low_high",
+        group: "outside",
+        values: low,
+        payout: 1,
+      })
+    );
+    events.push(
+      new Event({
+        id: "high",
+        type: "low_high",
+        group: "outside",
+        values: high,
+        payout: 1,
+      })
+    );
+    events.push(
+      new Event({
+        id: "even",
+        type: "even_odd",
+        group: "outside",
+        values: even,
+        payout: 1,
+      })
+    );
+    events.push(
+      new Event({
+        id: "odd",
+        type: "even_odd",
+        group: "outside",
+        values: odd,
+        payout: 1,
+      })
+    );
 
     return events;
   }
 
-  public static getEvent(id: EventId): Event {
+  public static getEventById(id: EventId): Event {
     return this.events.find((event) => event.id === id)!;
+  }
+
+  public static getNumberEvents(number: No): EventId[] {
+    let events: EventId[] = [];
+
+    if (number.value === 0) {
+      events.push("n0");
+    } else {
+      this.events.forEach((event) => {
+        if (event.containsNo(number)) {
+          events.push(event.id);
+        }
+      });
+    }
+
+    return events;
   }
 }

@@ -1,42 +1,37 @@
 import type { EventId, EventType } from "../types";
-import { Bet, BetConstructorArgs } from "./Bet";
+import { BetConstructorArgs } from "./Bet";
 import { No } from "./No";
 import { Roulette } from "./Roulette";
 
 type BetSystem = "martingala";
-
-type PreviousBet = BetConstructorArgs & { win: boolean };
+type PreviousBet = { eventId: EventId; win: boolean; lossAcc: number };
+type EventCounter = { eventId: EventId; count: number; threshold: number };
 
 export type StratConfig = {
   targetEvents: Array<EventId> | "all";
   betSystem: BetSystem;
-  initialStake: number;
+  baseStake: number;
   gameRecord?: Array<No>;
   risk?: number;
 };
 
 export class Strategy {
   public thresholds: Record<EventType, number>;
-  public targetEventsCounter: Array<{
-    eventId: EventId;
-    count: number;
-    threshold: number;
-  }>;
+  public targetEventsCounter: Array<EventCounter>;
   private betSystem: BetSystem;
-  private risk: number;
-  private initialStake: number;
+  // private risk: number;
+  private baseStake: number;
   private previousBets: Array<PreviousBet>;
 
   constructor(strategy: StratConfig) {
-    const { betSystem, targetEvents, initialStake, gameRecord, risk } =
-      strategy;
+    const { betSystem, targetEvents, baseStake, gameRecord } = strategy;
 
     let eventsCounterInit = [];
 
     if (targetEvents === "all") {
       eventsCounterInit = Roulette.events.map((event) => event.id);
     } else {
-      // removes repeated strings
+      // Elimina eventsId repetidos en caso de que los haya dentro del argumento
       eventsCounterInit = Array.from(new Set(targetEvents));
     }
 
@@ -46,15 +41,15 @@ export class Strategy {
       low_high: 4,
       column: 7,
       dozen: 7,
-      street: 18,
-      // TODO: GENERATE EVENTS IN ROULETTE STATIC PROP
+      street: 45,
+      // TODO: GENERAR LOS EVENTOS FALTANTES EN LA CLASE Roulette
       corner: 50,
       line: 50,
       number: 50,
       split: 50,
     };
     this.targetEventsCounter = eventsCounterInit.map((eventId) => {
-      const event = Roulette.getEvent(eventId);
+      const event = Roulette.getEventById(eventId);
       const counter = {
         eventId,
         count: 0,
@@ -70,57 +65,142 @@ export class Strategy {
 
       return counter;
     });
-    this.initialStake = initialStake;
+    this.baseStake = baseStake;
     this.betSystem = betSystem;
-    this.risk = risk ?? 2;
+    // this.risk = risk ?? 2;
     this.previousBets = [];
-    // this.lastOutcome =
-    //   gameRecord !== undefined && gameRecord.length !== 0
-    //     ? gameRecord[gameRecord.length - 1]
-    //     : undefined;
   }
 
   public updateTargetEventCounter(number: No) {
-    // this.lastOutcome = number;
-    this.targetEventsCounter.forEach((counter) => {
-      const event = Roulette.getEvent(counter.eventId);
-      const containsNo = event.containsNo(number);
+    if (number.value === 0) {
+      this.targetEventsCounter.forEach((counter) => {
+        const event = Roulette.getEventById(counter.eventId);
+        if (event.group === "outside") counter.count = 0;
+        else if (event.containsNo(number)) counter.count = 0;
+        else counter.count += 1;
+      });
+    } else {
+      this.targetEventsCounter.forEach((counter) => {
+        const event = Roulette.getEventById(counter.eventId);
 
-      if (containsNo) {
-        counter.count = 0;
-      } else {
-        counter.count += 1;
-      }
-    });
-  }
-
-  public updatePreviousBets(lastBet: BetConstructorArgs & { win: boolean }) {
-    this.previousBets.push(lastBet);
-  }
-
-  private getSystemBets(): Array<BetConstructorArgs> {
-    switch (this.betSystem) {
-      case "martingala":
-        // TODO: Implementar funciones del cuaderno
-        this.previousBets.forEach((bet) => {});
-        return [{ eventId: "black", stake: 10 }];
+        if (event.containsNo(number)) {
+          counter.count = 0;
+        } else {
+          counter.count += 1;
+        }
+      });
     }
   }
 
-  public getNextBets() {
+  public updatePreviousBetsBySystem(
+    lastBets: Array<BetConstructorArgs & { win: boolean }>
+  ) {
+    switch (this.betSystem) {
+      case "martingala":
+        // Retira de las apuestas anteriores las apuestas que no se hicieron en la ultima ronda
+        const newPreviousBets = this.previousBets.filter((pb) =>
+          lastBets.some((bet) => bet.eventId === pb.eventId)
+        );
+
+        lastBets.forEach((lastBet) => {
+          const betExistsIndex = newPreviousBets.findIndex(
+            (previousBet) => previousBet.eventId === lastBet.eventId
+          );
+
+          if (betExistsIndex !== -1) {
+            const updatedBet = newPreviousBets[betExistsIndex];
+
+            if (lastBet.win) {
+              updatedBet.win = true;
+              updatedBet.lossAcc = 0;
+            } else {
+              updatedBet.win = false;
+              updatedBet.lossAcc += lastBet.stake;
+            }
+          } else {
+            newPreviousBets.push({
+              eventId: lastBet.eventId,
+              win: lastBet.win,
+              lossAcc: lastBet.win ? 0 : lastBet.stake,
+            });
+          }
+        });
+        this.previousBets = newPreviousBets;
+        break;
+    }
+  }
+
+  private getSystemBets(): BetConstructorArgs[] {
+    switch (this.betSystem) {
+      case "martingala":
+        const bets = this.previousBets
+          .filter((bet) => !bet.win) // Obtener las apuestas que perdieron en la última ronda apostada
+          .filter((bet) => {
+            // Filtra los eventos que tengan el contador en 0. El único evento que puede resetear el contador a 0 es n0 (ver updateTargetEventCounter())
+            const eventCounter = this.targetEventsCounter.find(
+              (counter) => counter.eventId === bet.eventId
+            )!;
+
+            // TODO: ANALIZAR QUE OPCION ES MEJOR
+            return eventCounter.count > 0;
+            // return eventCounter.count > eventCounter.threshold;
+          })
+          .map((bet) => {
+            const { eventId, lossAcc } = bet;
+            const event = Roulette.getEventById(eventId);
+            let stake = 0;
+            if (lossAcc !== 0) {
+              // console.log("lossAcc: ", lossAcc);
+              // console.log("payout: ", event.payout);
+              // console.log("base stake: ", this.baseStake);
+              stake = Math.ceil(lossAcc / event.payout + this.baseStake);
+              // console.log("new stake: ", stake);
+            } else {
+              stake = this.baseStake;
+            }
+            return { eventId, stake };
+          });
+        return bets;
+    }
+  }
+
+  private getProbableBets(): BetConstructorArgs[] {
+    const probableBets = this.targetEventsCounter
+      .filter((counter) => counter.count >= counter.threshold) // Solo los que superan el threshold
+      .map((counter) => ({
+        eventId: counter.eventId,
+        stake: this.baseStake,
+      }));
+
+    return probableBets;
+  }
+
+  public getNextBets(): BetConstructorArgs[] {
     const systemBets = this.getSystemBets();
+    const probableBets = this.getProbableBets();
+    const nextBets = probableBets
+      .filter(
+        // Los eventos de sistema tienen prioridad por sobre los probables. Filtra los eventos repetidos de probableBets
+        (counter) =>
+          systemBets.findIndex(
+            (systemBet) => systemBet.eventId === counter.eventId
+          ) === -1
+      )
+      .concat(systemBets);
 
-    const eventsToBet = this.targetEventsCounter
-      .filter((counter) => counter.count >= counter.threshold)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, this.risk)
-      .map((counter) => counter.eventId);
+    // console.log("suggested bets: ", probableBets);
+    // console.log("systemBets: ", systemBets);
 
-    const bets = eventsToBet.map((eventId) => ({
-      eventId,
-      stake: this.initialStake,
-    }));
+    return nextBets;
+  }
 
-    return bets;
+  public arrangeTargetEventsCounter() {
+    // ordena de menor a mayor por threshold y luego de mayor a menor por count
+    this.targetEventsCounter.sort((a, b) => {
+      if (b.threshold !== a.threshold) {
+        return a.threshold - b.threshold;
+      }
+      return b.count - a.count;
+    });
   }
 }

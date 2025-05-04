@@ -9,7 +9,7 @@ export class Bet {
   stake: number;
 
   constructor({ eventId, stake }: BetConstructorArgs) {
-    this.event = Roulette.getEvent(eventId);
+    this.event = Roulette.getEventById(eventId);
     this.stake = stake;
   }
 
