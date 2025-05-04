@@ -12,14 +12,12 @@ export type StratConfig = {
   betSystem: BetSystem;
   baseStake: number;
   gameRecord?: Array<No>;
-  risk?: number;
 };
 
 export class Strategy {
   public thresholds: Record<EventType, number>;
   public targetEventsCounter: Array<EventCounter>;
   private betSystem: BetSystem;
-  // private risk: number;
   private baseStake: number;
   private previousBets: Array<PreviousBet>;
 
@@ -67,7 +65,6 @@ export class Strategy {
     });
     this.baseStake = baseStake;
     this.betSystem = betSystem;
-    // this.risk = risk ?? 2;
     this.previousBets = [];
   }
 
