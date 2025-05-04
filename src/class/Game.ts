@@ -38,7 +38,7 @@ export class Game {
   }
 
   private playRound() {
-    this.player.makeStratBet();
+    this.player.placeAutomatedBet();
     const no = this.roulette.spin();
 
     if (this.config.logs) console.log("-- Outcome number: ", no, " --");

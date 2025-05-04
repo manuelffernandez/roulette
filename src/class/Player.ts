@@ -3,6 +3,13 @@ import { No } from "./No";
 import { Roulette } from "./Roulette";
 import { StratConfig, Strategy } from "./Strategy";
 
+type PlayerConfig = {
+  name: string;
+  logs?: boolean;
+  bankroll: number;
+  strategy: StratConfig;
+};
+
 export class Player {
   public bankroll: number;
   private bets: Array<Bet>;
@@ -11,17 +18,7 @@ export class Player {
   private logs: boolean;
   public name: string;
 
-  constructor({
-    name,
-    logs = false,
-    bankroll,
-    strategy,
-  }: {
-    name: string;
-    logs?: boolean;
-    bankroll: number;
-    strategy: StratConfig;
-  }) {
+  constructor({ name, logs = false, bankroll, strategy }: PlayerConfig) {
     this.name = name;
     this.logs = logs;
     this.bankroll = bankroll;
@@ -34,7 +31,7 @@ export class Player {
     this.bets = [];
   }
 
-  public makeBet({ eventId, stake }: BetConstructorArgs) {
+  public placeBet({ eventId, stake }: BetConstructorArgs) {
     if (this.bankroll < stake) return false;
     if (this.logs)
       console.log(`${this.name} placed bet: `, eventId, "-> $", stake);
@@ -61,11 +58,11 @@ export class Player {
     return true;
   }
 
-  public makeStratBet() {
+  public placeAutomatedBet() {
     const bets = this.strategy.getNextBets();
     if (this.logs) console.log(`${this.name} suggested bets by strat: `, bets);
     bets.forEach((bet) =>
-      this.makeBet({ eventId: bet.eventId, stake: bet.stake })
+      this.placeBet({ eventId: bet.eventId, stake: bet.stake })
     );
   }
 
