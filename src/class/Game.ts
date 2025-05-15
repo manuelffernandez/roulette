@@ -2,12 +2,14 @@ import { CLI } from "./cli";
 import { No } from "./No";
 import { Player } from "./Player";
 import { Roulette } from "./Roulette";
+import { Statistics } from "./Statistics";
 
 export type GameConfig = {
   logs: boolean;
   seed: string | undefined;
   useSeed: boolean;
   rounds: number;
+  statistics: Statistics;
 };
 
 export type GameRecord = Array<No>;
@@ -17,6 +19,7 @@ const defualtConfig: GameConfig = {
   seed: undefined,
   useSeed: true,
   rounds: 100,
+  statistics: new Statistics(),
 };
 
 export class Game {
@@ -31,7 +34,7 @@ export class Game {
 
     let seed: GameConfig["seed"] = undefined;
     if (config.useSeed) {
-      const seed = config.seed ? config.seed : Math.random().toString();
+      seed = config.seed ? config.seed : Math.random().toString();
       console.log("seed: ", seed);
     }
 
@@ -52,22 +55,24 @@ export class Game {
 
   public start() {
     const { logs } = this.config;
-    const initial = this.player.bankroll;
-
-    if (logs) {
-      console.log("initial bankroll", initial);
-      CLI.separator();
-    }
 
     for (let i = 0; i < this.config.rounds; i++) {
       if (logs) console.log("\n ROUND ", i);
       this.playRound();
     }
-    const final = this.player.bankroll;
+  }
 
-    if (logs) {
-      CLI.separator();
-      console.log("final bankroll", final);
-    }
+  public end() {
+    this.config.statistics.addGame({
+      gameRecord: this.gameRecord,
+      player: {
+        name: this.player.name,
+        initialBankroll: this.player.initialBankroll,
+        finalBankroll: this.player.bankroll,
+      },
+    });
+
+    console.log("\ninitial bankroll: ", this.player.initialBankroll);
+    console.log("final bankroll: ", this.player.bankroll, "\n");
   }
 }

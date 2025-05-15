@@ -13,6 +13,7 @@ type PlayerConfig = {
 export type BetRecord = Array<{ bet: Bet; win: boolean }>;
 
 export class Player {
+  public initialBankroll: number;
   public bankroll: number;
   private activeBets: Array<Bet>;
   private activeBettedNumbers: Array<No>;
@@ -25,6 +26,7 @@ export class Player {
     this.name = name;
     this.logs = logs;
     this.bankroll = bankroll;
+    this.initialBankroll = bankroll;
     this.activeBets = [];
     this.activeBettedNumbers = [];
     this.strategy = new Strategy(strategy);

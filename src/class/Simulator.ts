@@ -1,15 +1,17 @@
 import { Game } from "./Game";
 import { Player } from "./Player";
+import { Statistics } from "./Statistics";
 
 export class Simulator {
-  private games: number;
+  private numberOfgames: number;
+  private statistics: Statistics = new Statistics();
 
-  constructor(games?: number) {
-    this.games = games ? games : 1;
+  constructor(numberOfgames?: number) {
+    this.numberOfgames = numberOfgames ? numberOfgames : 1;
   }
 
   public run() {
-    for (let i = 0; i < this.games; i++) {
+    for (let i = 0; i < this.numberOfgames; i++) {
       const player = new Player({
         name: "Manuel",
         logs: false,
@@ -30,8 +32,13 @@ export class Simulator {
         },
       });
 
-      const game: Game = new Game(player, { logs: true });
+      const game = new Game(player, {
+        logs: false,
+        statistics: this.statistics,
+      });
       game.start();
+      game.end();
     }
+    this.statistics.showStatistics();
   }
 }
