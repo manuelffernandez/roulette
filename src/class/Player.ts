@@ -10,10 +10,13 @@ type PlayerConfig = {
   strategy: StratConfig;
 };
 
+export type BetRecord = Array<{ bet: Bet; win: boolean }>;
+
 export class Player {
   public bankroll: number;
-  private bets: Array<Bet>;
-  private betNumbers: Array<No>;
+  private activeBets: Array<Bet>;
+  private activeBettedNumbers: Array<No>;
+  private bettingHistory: Array<BetRecord>;
   private strategy: Strategy;
   private logs: boolean;
   public name: string;
@@ -22,68 +25,68 @@ export class Player {
     this.name = name;
     this.logs = logs;
     this.bankroll = bankroll;
-    this.bets = [];
-    this.betNumbers = [];
+    this.activeBets = [];
+    this.activeBettedNumbers = [];
     this.strategy = new Strategy(strategy);
+    this.bettingHistory = [];
   }
 
-  private resetBets() {
-    this.bets = [];
+  private resetActiveBets() {
+    this.activeBets = [];
   }
 
   public placeBet({ eventId, stake }: BetConstructorArgs) {
     if (this.bankroll < stake) return false;
-    if (this.logs)
+    if (this.logs) {
       console.log(`${this.name} placed bet: `, eventId, "-> $", stake);
+    }
 
-    // remove from players bankroll
+    // remove stake amount from players bankroll
     this.bankroll -= stake;
     const event = Roulette.getEventById(eventId);
 
     // if bet already exists, add stake to it. If not create one.
-    const idx = this.bets.findIndex((bet) => {
+    const idx = this.activeBets.findIndex((bet) => {
       bet.event.isEqual(event);
     });
-    if (idx !== -1) this.bets[idx].increaseBet(stake);
-    else {
-      this.bets.push(new Bet({ eventId, stake }));
-
-      event.values.forEach((value) => {
-        const isNumberBet = this.betNumbers.find(
-          (number) => number.value === value.value
-        );
-        if (!isNumberBet) this.betNumbers.push(value);
-      });
+    if (idx !== -1) {
+      this.activeBets[idx].increaseBet(stake);
+    } else {
+      this.activeBets.push(new Bet({ eventId, stake }));
     }
+    event.values.forEach((value) => {
+      const isNumberBetted = this.activeBettedNumbers.find(
+        (number) => number.value === value.value
+      );
+      if (!isNumberBetted) this.activeBettedNumbers.push(value);
+    });
     return true;
   }
 
   public placeAutomatedBet() {
     const bets = this.strategy.getNextBets();
     if (this.logs) console.log(`${this.name} suggested bets by strat: `, bets);
-    bets.forEach((bet) =>
-      this.placeBet({ eventId: bet.eventId, stake: bet.stake })
-    );
+    bets.forEach((bet) => this.placeBet(bet));
   }
 
   public resolveBets(number: No) {
     let profit: number = 0;
     let returnedStakes: number = 0;
-    let lastBets: Array<BetConstructorArgs & { win: boolean }> = [];
     this.strategy.updateTargetEventCounter(number);
 
-    if (this.bets.length !== 0) {
-      this.bets.forEach((bet) => {
-        const lastBet = { eventId: bet.event.id, stake: bet.stake, win: false };
+    if (this.activeBets.length !== 0) {
+      const betRecord: BetRecord = this.activeBets.map((bet) => {
+        let win = false;
         if (bet.event.containsNo(number)) {
-          lastBet.win = true;
+          win = true;
           profit += bet.stake * bet.event.payout;
           returnedStakes += bet.stake;
         }
-        lastBets.push(lastBet);
+        return { bet, win };
       });
 
-      this.strategy.updatePreviousBetsBySystem(lastBets);
+      this.bettingHistory.push(betRecord);
+      this.strategy.updateLastBetsBySystem(betRecord);
       this.bankroll += profit + returnedStakes;
 
       if (this.logs) {
@@ -91,7 +94,7 @@ export class Player {
         console.log("bankroll: ", this.bankroll);
       }
 
-      this.resetBets();
+      this.resetActiveBets();
     }
 
     if (this.logs) this.showTargetEventsCounter();
@@ -99,7 +102,7 @@ export class Player {
   }
 
   public getWinningProb() {
-    const probability = this.betNumbers.length / 37;
+    const probability = this.activeBettedNumbers.length / 37;
     return probability;
   }
 

@@ -1,10 +1,10 @@
-import type { EventId, EventType } from "../types";
+import type { BetSystem, EventId, EventType } from "../types";
 import { BetConstructorArgs } from "./Bet";
 import { No } from "./No";
+import { type BetRecord } from "./Player";
 import { Roulette } from "./Roulette";
 
-type BetSystem = "martingala";
-type PreviousBet = { eventId: EventId; win: boolean; lossAcc: number };
+type StrategyBetRecord = { eventId: EventId; win: boolean; lossAcc: number };
 type EventCounter = { eventId: EventId; count: number; threshold: number };
 
 export type StratConfig = {
@@ -19,7 +19,7 @@ export class Strategy {
   public targetEventsCounter: Array<EventCounter>;
   private betSystem: BetSystem;
   private baseStake: number;
-  private previousBets: Array<PreviousBet>;
+  private strategySummary: Array<StrategyBetRecord>;
 
   constructor(strategy: StratConfig) {
     const { betSystem, targetEvents, baseStake, gameRecord } = strategy;
@@ -65,7 +65,7 @@ export class Strategy {
     });
     this.baseStake = baseStake;
     this.betSystem = betSystem;
-    this.previousBets = [];
+    this.strategySummary = [];
   }
 
   public updateTargetEventCounter(number: No) {
@@ -89,69 +89,57 @@ export class Strategy {
     }
   }
 
-  public updatePreviousBetsBySystem(
-    lastBets: Array<BetConstructorArgs & { win: boolean }>
-  ) {
+  public updateLastBetsBySystem(lastBetRecord: BetRecord) {
     switch (this.betSystem) {
-      case "martingala":
-        // Retira de las apuestas anteriores las apuestas que no se hicieron en la ultima ronda
-        const newPreviousBets = this.previousBets.filter((pb) =>
-          lastBets.some((bet) => bet.eventId === pb.eventId)
+      case "martingala": {
+        const newStrategySummary: Array<StrategyBetRecord> = lastBetRecord.map(
+          (betRecord) => {
+            const { bet, win } = betRecord;
+            const matchedStrategyBetRecord = this.strategySummary.find(
+              (strategyBetRecord) => strategyBetRecord.eventId === bet.event.id
+            );
+
+            if (matchedStrategyBetRecord !== undefined) {
+              let lossAcc = 0;
+              if (!win) lossAcc = matchedStrategyBetRecord.lossAcc + bet.stake;
+              return { eventId: bet.event.id, win, lossAcc };
+            } else {
+              return {
+                eventId: bet.event.id,
+                win,
+                lossAcc: win ? 0 : bet.stake,
+              };
+            }
+          }
         );
 
-        lastBets.forEach((lastBet) => {
-          const betExistsIndex = newPreviousBets.findIndex(
-            (previousBet) => previousBet.eventId === lastBet.eventId
-          );
-
-          if (betExistsIndex !== -1) {
-            const updatedBet = newPreviousBets[betExistsIndex];
-
-            if (lastBet.win) {
-              updatedBet.win = true;
-              updatedBet.lossAcc = 0;
-            } else {
-              updatedBet.win = false;
-              updatedBet.lossAcc += lastBet.stake;
-            }
-          } else {
-            newPreviousBets.push({
-              eventId: lastBet.eventId,
-              win: lastBet.win,
-              lossAcc: lastBet.win ? 0 : lastBet.stake,
-            });
-          }
-        });
-        this.previousBets = newPreviousBets;
+        this.strategySummary = newStrategySummary;
         break;
+      }
     }
   }
 
   private getSystemBets(): BetConstructorArgs[] {
     switch (this.betSystem) {
       case "martingala":
-        const bets = this.previousBets
-          .filter((bet) => !bet.win) // Obtener las apuestas que perdieron en la última ronda apostada
-          .filter((bet) => {
+        const bets = this.strategySummary
+          .filter((strategyBetRecord) => !strategyBetRecord.win) // Obtener las apuestas que perdieron en la última ronda apostada
+          .filter((strategyBetRecord) => {
             // Filtra los eventos que tengan el contador en 0. El único evento que puede resetear el contador a 0 es n0 (ver updateTargetEventCounter())
             const eventCounter = this.targetEventsCounter.find(
-              (counter) => counter.eventId === bet.eventId
+              (counter) => counter.eventId === strategyBetRecord.eventId
             )!;
 
             // TODO: ANALIZAR QUE OPCION ES MEJOR
             return eventCounter.count > 0;
             // return eventCounter.count > eventCounter.threshold;
           })
-          .map((bet) => {
-            const { eventId, lossAcc } = bet;
+          .map((strategyBetRecord) => {
+            const { eventId, lossAcc } = strategyBetRecord;
             const event = Roulette.getEventById(eventId);
             let stake = 0;
             if (lossAcc !== 0) {
-              // console.log("lossAcc: ", lossAcc);
-              // console.log("payout: ", event.payout);
-              // console.log("base stake: ", this.baseStake);
               stake = Math.ceil(lossAcc / event.payout + this.baseStake);
-              // console.log("new stake: ", stake);
             } else {
               stake = this.baseStake;
             }
@@ -184,9 +172,6 @@ export class Strategy {
           ) === -1
       )
       .concat(systemBets);
-
-    // console.log("suggested bets: ", probableBets);
-    // console.log("systemBets: ", systemBets);
 
     return nextBets;
   }

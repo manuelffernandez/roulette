@@ -1,3 +1,5 @@
+export type BetSystem = "martingala";
+
 export type EventGroup = "inside" | "outside";
 
 export type EventType =
