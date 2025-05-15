@@ -7,17 +7,21 @@ export type GameConfig = {
   logs: boolean;
   seed: string | undefined;
   useSeed: boolean;
+  rounds: number;
 };
+
+export type GameRecord = Array<No>;
 
 const defualtConfig: GameConfig = {
   logs: false,
   seed: undefined,
   useSeed: true,
+  rounds: 100,
 };
 
 export class Game {
   readonly roulette: Roulette;
-  records: Array<No>;
+  gameRecord: GameRecord = [];
   private player: Player;
   private config: GameConfig;
 
@@ -32,7 +36,6 @@ export class Game {
     }
 
     this.roulette = new Roulette(seed);
-    this.records = [];
     this.player = player;
     this.config = config;
   }
@@ -43,7 +46,7 @@ export class Game {
 
     if (this.config.logs) console.log("-- Outcome number: ", no, " --");
 
-    this.records.push(no);
+    this.gameRecord.push(no);
     this.player.resolveBets(no);
   }
 
@@ -56,20 +59,15 @@ export class Game {
       CLI.separator();
     }
 
-    const rounds = 150;
-    for (let i = 0; i < rounds; i++) {
+    for (let i = 0; i < this.config.rounds; i++) {
       if (logs) console.log("\n ROUND ", i);
       this.playRound();
     }
     const final = this.player.bankroll;
-    const winPercentage = (final / initial - 1) * 100;
 
     if (logs) {
       CLI.separator();
       console.log("final bankroll", final);
-      console.log("profit percentage", winPercentage);
     }
-
-    return winPercentage;
   }
 }
