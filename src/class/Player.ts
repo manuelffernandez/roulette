@@ -35,6 +35,7 @@ export class Player {
 
   private resetActiveBets() {
     this.activeBets = [];
+    this.activeBettedNumbers = [];
   }
 
   public placeBet({ eventId, stake }: BetConstructorArgs) {
@@ -48,9 +49,9 @@ export class Player {
     const event = Roulette.getEventById(eventId);
 
     // if bet already exists, add stake to it. If not create one.
-    const idx = this.activeBets.findIndex((bet) => {
-      bet.event.isEqual(event);
-    });
+    const idx = this.activeBets.findIndex((bet) =>
+      bet.event.isEqual(event)
+    );
     if (idx !== -1) {
       this.activeBets[idx].increaseBet(stake);
     } else {
